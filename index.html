@@ -530,7 +530,243 @@
         });
 
         // Page navigation
-        function showPage(pageId) {
+        function showApplications(status) {
+            // Update active tab
+            document.querySelectorAll('.category-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            const filteredApps = applications.filter(app => app.status === status);
+            const container = document.getElementById('applicationsContainer');
+
+            if (filteredApps.length === 0) {
+                container.innerHTML = `
+                    <div class="status-message warning">
+                        لا توجد طلبات في هذه الفئة
+                    </div>
+                `;
+                return;
+            }
+
+            let appsHtml = '';
+            filteredApps.forEach(app => {
+                appsHtml += `
+                    <div class="application-card">
+                        <div class="application-header">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <img src="${app.avatar}" alt="Avatar" style="width: 40px; height: 40px; border-radius: 50%;">
+                                <div>
+                                    <strong>${app.username}</strong><br>
+                                    <small>ID: ${app.userId}</small><br>
+                                    <small>${new Date(app.timestamp).toLocaleDateString('ar-SA')}</small>
+                                </div>
+                            </div>
+                            <div class="application-actions">
+                                <button class="action-btn view-btn" onclick="viewApplication(${app.id})">عرض</button>
+                                ${status === 'pending' ? `
+                                    <button class="action-btn accept-btn" onclick="updateApplicationStatus(${app.id}, 'accepted')">قبول</button>
+                                    <button class="action-btn reject-btn" onclick="updateApplicationStatus(${app.id}, 'rejected')">رفض</button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = appsHtml;
+        }
+
+        function viewApplication(appId) {
+            const app = applications.find(a => a.id === appId);
+            if (!app) return;
+
+            const questions = [
+                '🕒 كم عمرك؟ وهل عندك خبرة سابقة بالإدارة؟',
+                '🌍 من أي دولة تتكلم؟ وكم تقدر تتواجد يومياً؟',
+                '🧠 هل عندك معرفة بأنواع الحسابات (NFA / SFA / MCFA)؟ اشرح باختصار.',
+                '🎯 ليش حاب تنضم لفريق إدارة سيرفر Warden؟',
+                '🛠️ لو فتح عضو تذكرة وقال إن الحساب ما يشتغل، كيف تتصرف؟',
+                '💬 هل عندك خبرة في التعامل مع الأعضاء وحل المشاكل؟ اعطِ مثال بسيط لو فيه.',
+                '⚠️ كيف تتصرف لو شفت عضو يسب أو يخالف القوانين؟',
+                '🎧 هل عندك مايك؟ وهل تقدر تدخل مكالمات إذا احتاج الفريق؟',
+                '📈 هل تقدر تساعد في نشر السيرفر أو جلب أعضاء؟ وكيف؟',
+                '✍️ أي ملاحظات أو إضافات تحب تقولها؟'
+            ];
+
+            const answerKeys = [
+                'age_experience', 'country_availability', 'account_knowledge',
+                'motivation', 'ticket_handling', 'member_experience',
+                'rule_violations', 'voice_calls', 'promotion', 'additional_notes'
+            ];
+
+            let answersHtml = '';
+            questions.forEach((question, index) => {
+                const answer = app.answers[answerKeys[index]] || 'لم يتم الإجابة';
+                answersHtml += `
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 10px;">
+                        <strong style="color: #00bfff; display: block; margin-bottom: 8px;">${question}</strong>
+                        <div style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; white-space: pre-wrap;">${answer}</div>
+                    </div>
+                `;
+            });
+
+            // Create modal-like overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0,0,0,0.8);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                overflow-y: auto;
+            `;
+
+            overlay.innerHTML = `
+                <div style="background: linear-gradient(135deg, #1e3a8a 0%, #1e1b4b 100%); 
+                           border-radius: 20px; 
+                           padding: 30px; 
+                           max-width: 800px; 
+                           width: 100%; 
+                           max-height: 90vh; 
+                           overflow-y: auto;
+                           border: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="color: #00bfff; margin: 0;">تقديم: ${app.username}</h3>
+                        <button onclick="this.closest('.overlay').remove()" 
+                                style="background: #ff3b30; 
+                                       border: none; 
+                                       color: white; 
+                                       padding: 8px 12px; 
+                                       border-radius: 8px; 
+                                       cursor: pointer;">✕</button>
+                    </div>
+                    <div style="color: white;">
+                        ${answersHtml}
+                    </div>
+                </div>
+            `;
+
+            overlay.className = 'overlay';
+            document.body.appendChild(overlay);
+        }
+
+        function updateApplicationStatus(appId, newStatus) {
+            const appIndex = applications.findIndex(a => a.id === appId);
+            if (appIndex === -1) return;
+
+            applications[appIndex].status = newStatus;
+            
+            // Update user applications as well
+            const userId = applications[appIndex].userId;
+            if (userApplications[userId]) {
+                userApplications[userId].status = newStatus;
+            }
+
+            localStorage.setItem('applications', JSON.stringify(applications));
+            localStorage.setItem('userApplications', JSON.stringify(userApplications));
+
+            // Refresh the current view
+            showApplications(document.querySelector('.category-tab.active').textContent === 'معلقة' ? 'pending' : 
+                           document.querySelector('.category-tab.active').textContent === 'مقبولة' ? 'accepted' : 'rejected');
+
+            // Show success message
+            const statusText = newStatus === 'accepted' ? 'قُبل' : 'رُفض';
+            alert(`تم ${statusText} التقديم بنجاح`);
+        }
+
+        function toggleLanguage() {
+            // This is a placeholder for language switching functionality
+            // You can implement full Arabic/English translation here
+            const langBtn = document.querySelector('.lang-btn');
+            if (currentLanguage === 'ar') {
+                langBtn.textContent = 'EN';
+                currentLanguage = 'en';
+                // Add English translations here
+            } else {
+                langBtn.textContent = 'عر';
+                currentLanguage = 'ar';
+                // Revert to Arabic
+            }
+        }
+
+        // Handle ownership panel access
+        if (window.location.pathname.includes('/ownership') || window.location.hash === '#ownership') {
+            document.querySelector('.navbar').style.display = 'none';
+            document.querySelector('.container').style.display = 'none';
+            document.getElementById('ownershipPanel').style.display = 'block';
+        }
+
+        // Simulate some demo applications for testing
+        if (applications.length === 0) {
+            const demoApps = [
+                {
+                    id: 1,
+                    userId: '987654321098765432',
+                    username: 'DemoUser#0001',
+                    avatar: 'https://cdn.discordapp.com/embed/avatars/1.png',
+                    timestamp: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
+                    status: 'pending',
+                    answers: {
+                        age_experience: '20 سنة، لدي خبرة في إدارة سيرفرات أخرى',
+                        country_availability: 'السعودية، 6-8 ساعات يومياً',
+                        account_knowledge: 'نعم، NFA = No Full Access، SFA = Semi Full Access، MCFA = Microsoft Full Access',
+                        motivation: 'أريد المساعدة في تطوير المجتمع وتقديم الدعم للأعضاء',
+                        ticket_handling: 'سأطلب معلومات إضافية وأحاول حل المشكلة خطوة بخطوة',
+                        member_experience: 'نعم، ساعدت في حل مشاكل تقنية متعددة',
+                        rule_violations: 'سأعطي تحذير أولاً، ثم ميوت إذا استمر، وأخيراً باند إذا لزم الأمر',
+                        voice_calls: 'نعم، لدي مايك ويمكنني المشاركة في المكالمات',
+                        promotion: 'يمكنني النشر في منصات التواصل الاجتماعي ودعوة الأصدقاء',
+                        additional_notes: 'متحمس للانضمام للفريق والمساهمة في نجاح السيرفر'
+                    }
+                }
+            ];
+            
+            applications = demoApps;
+            localStorage.setItem('applications', JSON.stringify(applications));
+        }
+
+        // Add some CSS animations for better UX
+        const style = document.createElement('style');
+        style.textContent = `
+            .application-card {
+                transition: transform 0.3s ease, box-shadow 0.3s ease;
+            }
+            
+            .application-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 10px 30px rgba(0, 191, 255, 0.2);
+            }
+            
+            .action-btn:hover {
+                transform: scale(1.05);
+            }
+            
+            @keyframes slideIn {
+                from {
+                    opacity: 0;
+                    transform: translateX(-20px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+            }
+            
+            .application-card {
+                animation: slideIn 0.3s ease-out;
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>Page(pageId) {
             document.querySelectorAll('.page').forEach(page => {
                 page.classList.remove('active');
             });
@@ -550,18 +786,17 @@
 
         // Discord OAuth simulation
         function handleGetStarted() {
-            if (!currentUser) {
-                // Simulate Discord OAuth
-                const clientId = '1383684880214528112'; // Replace with your actual bot client ID
-                const redirectUri = 'https://asrdirirurb.github.io/WardenApp/';
-                const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify`;
-                
-                // For demo purposes, simulate successful auth
-                simulateDiscordAuth();
-            } else {
-                showApplicationForm();
-            }
-        }
+    if (!currentUser) {
+        const clientId = '1383684880214528112'; // your real Client ID
+        const redirectUri = encodeURIComponent('https://asrdirirurb.github.io/WardenApp/callback'); // or your deployed server URL
+        const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify`;
+
+        // Redirect to Discord OAuth2
+        window.location.href = discordAuthUrl;
+    } else {
+        showApplicationForm();
+    }
+}
 
         function simulateDiscordAuth() {
             // Simulate Discord user data
